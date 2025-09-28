@@ -1,30 +1,44 @@
-import React, { useState, useEffect } from 'react'
-import { Container, Button, Offcanvas, Form } from 'react-bootstrap'
-import { Gear } from 'react-bootstrap-icons'
-import KanbanBoard from './components/KanbanBoard'
+import React, { useEffect, useState } from "react"
+import { Container, Button, Offcanvas, Form } from "react-bootstrap"
+import { Gear } from "react-bootstrap-icons"
+import KanbanBoard from "./components/KanbanBoard"
 
 const App: React.FC = () => {
-  const [jiraUrl, setJiraUrl] = useState(localStorage.getItem('jiraUrl') || 'https://your-jira-url')
-  const [project, setProject] = useState(localStorage.getItem('project') || 'DCW')
-  const [issuetype, setIssuetype] = useState(localStorage.getItem('issuetype') || 'Solution Initiative')
+  const [jiraUrl, setJiraUrl] = useState(localStorage.getItem("jiraUrl") || "https://your-jira-url")
+  const [project, setProject] = useState(localStorage.getItem("project") || "DCW")
+  const [issuetype, setIssuetype] = useState(localStorage.getItem("issuetype") || "Solution Initiative")
 
-  // 👇 static user list (comma separated string)
-  const [userList, setUserList] = useState(localStorage.getItem('userList') || 'alice,bob,charlie')
-  const [user, setUser] = useState(localStorage.getItem('user') || '')
+  // 🔹 User list + dropdown
+  const [userList, setUserList] = useState(localStorage.getItem("userList") || "alice,bob,charlie")
+  const [user, setUser] = useState(localStorage.getItem("user") || "")
+  const users = userList.split(",").map((u) => u.trim()).filter(Boolean)
 
-  const [search, setSearch] = useState('')
+  // 🔹 Search + refresh
+  const [search, setSearch] = useState("")
   const [refreshInterval, setRefreshInterval] = useState<number>(0)
   const [refreshKey, setRefreshKey] = useState<number>(0)
+
+  // 🔹 Settings panel
   const [showSettings, setShowSettings] = useState(false)
 
+  // 🔹 PAT storage
+  const [pat, setPat] = useState<string | null>(null)
+  const [tempPat, setTempPat] = useState("")
+
   useEffect(() => {
-    localStorage.setItem('userList', userList)
+    const loadPat = async () => {
+      const stored = await window.api.getPAT()
+      setPat(stored)
+    }
+    loadPat()
+  }, [])
+
+  useEffect(() => {
+    localStorage.setItem("userList", userList)
     if (user) {
-      localStorage.setItem('user', user)
+      localStorage.setItem("user", user)
     }
   }, [user, userList])
-
-  const users = userList.split(',').map(u => u.trim()).filter(Boolean)
 
   return (
     <Container fluid className="p-3">
@@ -35,7 +49,7 @@ const App: React.FC = () => {
         </Button>
       </div>
 
-      {/* Offcanvas Settings */}
+      {/* Settings Panel */}
       <Offcanvas show={showSettings} onHide={() => setShowSettings(false)} placement="end">
         <Offcanvas.Header closeButton>
           <Offcanvas.Title>Settings</Offcanvas.Title>
@@ -47,9 +61,9 @@ const App: React.FC = () => {
             <Form.Control
               type="text"
               value={jiraUrl}
-              onChange={e => {
+              onChange={(e) => {
                 setJiraUrl(e.target.value)
-                localStorage.setItem('jiraUrl', e.target.value)
+                localStorage.setItem("jiraUrl", e.target.value)
               }}
             />
           </Form.Group>
@@ -60,9 +74,9 @@ const App: React.FC = () => {
             <Form.Control
               type="text"
               value={project}
-              onChange={e => {
+              onChange={(e) => {
                 setProject(e.target.value)
-                localStorage.setItem('project', e.target.value)
+                localStorage.setItem("project", e.target.value)
               }}
             />
           </Form.Group>
@@ -73,9 +87,9 @@ const App: React.FC = () => {
             <Form.Control
               type="text"
               value={issuetype}
-              onChange={e => {
+              onChange={(e) => {
                 setIssuetype(e.target.value)
-                localStorage.setItem('issuetype', e.target.value)
+                localStorage.setItem("issuetype", e.target.value)
               }}
             />
           </Form.Group>
@@ -86,23 +100,64 @@ const App: React.FC = () => {
             <Form.Control
               type="text"
               value={userList}
-              onChange={e => setUserList(e.target.value)}
+              onChange={(e) => setUserList(e.target.value)}
             />
             <Form.Text className="text-muted">e.g. alice,bob,charlie</Form.Text>
           </Form.Group>
 
-          {/* Dropdown */}
+          {/* User dropdown */}
           <Form.Group className="mb-3">
             <Form.Label>Select User</Form.Label>
-            <Form.Select
-              value={user}
-              onChange={e => setUser(e.target.value)}
-            >
+            <Form.Select value={user} onChange={(e) => setUser(e.target.value)}>
               <option value="">-- Select user --</option>
-              {users.map(u => (
-                <option key={u} value={u}>{u}</option>
+              {users.map((u) => (
+                <option key={u} value={u}>
+                  {u}
+                </option>
               ))}
             </Form.Select>
+          </Form.Group>
+
+          {/* PAT Storage */}
+          <Form.Group className="mb-3">
+            <Form.Label>Jira Personal Access Token</Form.Label>
+            <Form.Control
+              type="password"
+              placeholder="Enter your PAT"
+              value={tempPat || ""}
+              onChange={(e) => setTempPat(e.target.value)}
+            />
+            <div className="mt-2">
+              <Button
+                variant="primary"
+                size="sm"
+                className="me-2"
+                onClick={async () => {
+                  if (tempPat.trim()) {
+                    await window.api.savePAT(tempPat.trim())
+                    setPat(tempPat.trim())
+                    setTempPat("")
+                  }
+                }}
+              >
+                Save PAT
+              </Button>
+              <Button
+                variant="outline-danger"
+                size="sm"
+                onClick={async () => {
+                  await window.api.clearPAT()
+                  setPat(null)
+                }}
+              >
+                Clear PAT
+              </Button>
+            </div>
+            {pat ? (
+              <Form.Text className="text-success">✔ PAT stored</Form.Text>
+            ) : (
+              <Form.Text className="text-danger">❌ No PAT stored</Form.Text>
+            )}
           </Form.Group>
 
           {/* Search */}
@@ -112,7 +167,7 @@ const App: React.FC = () => {
               type="text"
               placeholder="🔍 Search initiatives..."
               value={search}
-              onChange={e => setSearch(e.target.value)}
+              onChange={(e) => setSearch(e.target.value)}
             />
           </Form.Group>
 
@@ -121,7 +176,7 @@ const App: React.FC = () => {
             <Form.Label>Refresh Interval</Form.Label>
             <Form.Select
               value={refreshInterval}
-              onChange={e => setRefreshInterval(Number(e.target.value))}
+              onChange={(e) => setRefreshInterval(Number(e.target.value))}
             >
               <option value={0}>Manual Refresh</option>
               <option value={1}>Every 1 min</option>
