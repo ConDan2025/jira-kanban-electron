@@ -1,52 +1,52 @@
 {
-  "name": "jira-kanban-electron",
-  "version": "0.1.0",
-  "private": true,
-  "description": "Electron React app for Jira DC Kanban of Solution Initiatives with my subtasks",
+  "name": "jira-kanban",
+  "version": "1.0.0",
+  "description": "Kanban board for Jira Solution Initiatives",
   "main": "main.js",
-  "author": "You",
+  "author": "Your Team",
   "license": "MIT",
   "scripts": {
-    "postinstall": "electron-builder install-app-deps",
-    "dev": "concurrently -k \"cross-env IS_DEV=1 vite\" \"wait-on http://localhost:5173 && electron .\"",
-    "build:renderer": "vite build",
-    "build": "npm run build:renderer && cross-env IS_DEV=0 electron-builder",
-    "electron:dev": "npm run dev"
+    "dev": "cross-env NODE_ENV=development vite",
+    "electron:dev": "concurrently -k \"cross-env NODE_ENV=development vite\" \"wait-on http://localhost:5173 && electron .\"",
+    "build:renderer": "cross-env NODE_ENV=production vite build",
+    "build": "npm run build:renderer && cross-env NODE_ENV=production electron-builder"
   },
   "dependencies": {
-    "axios": "^1.7.2",
-    "keytar": "^7.9.0",
-    "react": "^18.3.1",
-    "react-dom": "^18.3.1"
+  "axios": "^1.7.7",
+  "bootstrap": "^5.3.3",
+  "react": "^18.2.0",
+  "react-bootstrap": "^2.10.4",
+  "react-bootstrap-icons": "^1.11.3",
+  "react-dom": "^18.2.0"
   },
   "devDependencies": {
-    "@types/node": "^20.11.30",
-    "@types/react": "^18.2.66",
-    "@types/react-dom": "^18.2.22",
     "concurrently": "^8.2.2",
     "cross-env": "^7.0.3",
-    "electron": "^30.0.9",
+    "electron": "^29.3.0",
     "electron-builder": "^24.13.3",
     "typescript": "^5.4.5",
-    "vite": "^5.2.8",
+    "vite": "^5.3.1",
+    "@vitejs/plugin-react": "^4.3.1",
     "wait-on": "^7.2.0"
   },
   "build": {
-    "appId": "com.yourcompany.jira-kanban",
+    "appId": "com.vanderlande.jirakanban",
     "productName": "Jira Kanban",
     "files": [
-      "**/*",
-      "!renderer/node_modules/**"
+      "dist/**/*",
+      "main.js",
+      "preload.js",
+      "package.json"
     ],
-    "win": {
-      "target": "nsis",
-      "icon": "icon.ico"
+    "directories": {
+      "buildResources": "assets"
     },
-    "nsis": {
-      "oneClick": true,
-      "perMachine": false,
-      "allowElevation": true,
-      "allowToChangeInstallationDirectory": false
+    "asar": true,
+    "npmRebuild": false,
+    "win": {
+      "target": ["nsis", "portable"],
+      "icon": "assets/icon.ico",
+      "signAndEditExecutable": false
     }
   }
 }
