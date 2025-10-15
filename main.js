@@ -3,7 +3,7 @@ const path = require("path")
 const fs = require("fs")
 const axios = require("axios")
 
-const isDev = !app.isPackaged
+const isDev = process.env.NODE_ENV === "development" || !process.env.NODE_ENV === "production"
 const patFilePath = () => path.join(app.getPath("userData"), "pat.bin")
 
 // --- PAT storage ---
@@ -106,6 +106,7 @@ function createWindow() {
     win.loadURL("http://localhost:5173")
     win.webContents.openDevTools()
   } else {
+    console.log("Loading file:", path.join(__dirname, "dist", "index.html"))
     win.loadFile(path.join(__dirname, "dist", "index.html"))
   }
 

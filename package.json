@@ -7,26 +7,30 @@
   "license": "MIT",
   "scripts": {
     "dev": "cross-env NODE_ENV=development vite",
-    "electron:dev": "concurrently -k \"cross-env NODE_ENV=development vite\" \"wait-on http://localhost:5173 && electron .\"",
+    "electron:dev": "concurrently -k \"cross-env NODE_ENV=development vite\" \"wait-on http://localhost:5173 && cross-env NODE_ENV=development electron .\"",
     "build:renderer": "cross-env NODE_ENV=production vite build",
     "build": "npm run build:renderer && cross-env NODE_ENV=production electron-builder"
   },
   "dependencies": {
-  "axios": "^1.7.7",
-  "bootstrap": "^5.3.3",
-  "react": "^18.2.0",
-  "react-bootstrap": "^2.10.4",
-  "react-bootstrap-icons": "^1.11.3",
-  "react-dom": "^18.2.0"
+    "axios": "^1.7.7",
+    "bootstrap": "^5.3.3",
+    "react": "^18.2.0",
+    "react-bootstrap": "^2.10.4",
+    "react-bootstrap-icons": "^1.11.3",
+    "react-dom": "^18.2.0"
   },
   "devDependencies": {
+    "@testing-library/jest-dom": "^6.9.1",
+    "@testing-library/react": "^16.3.0",
+    "@vitejs/plugin-react": "^4.3.1",
     "concurrently": "^8.2.2",
     "cross-env": "^7.0.3",
     "electron": "^29.3.0",
     "electron-builder": "^24.13.3",
+    "jsdom": "^27.0.0",
     "typescript": "^5.4.5",
     "vite": "^5.3.1",
-    "@vitejs/plugin-react": "^4.3.1",
+    "vitest": "^3.2.4",
     "wait-on": "^7.2.0"
   },
   "build": {
@@ -44,7 +48,10 @@
     "asar": true,
     "npmRebuild": false,
     "win": {
-      "target": ["nsis", "portable"],
+      "target": [
+        "nsis",
+        "portable"
+      ],
       "icon": "assets/icon.ico",
       "signAndEditExecutable": false
     }

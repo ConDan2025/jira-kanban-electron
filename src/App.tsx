@@ -4,7 +4,7 @@ import { Gear } from "react-bootstrap-icons"
 import KanbanBoard from "./components/KanbanBoard"
 
 const App: React.FC = () => {
-  const [jiraUrl, setJiraUrl] = useState(localStorage.getItem("jiraUrl") || "https://your-jira-url")
+  const [jiraUrl, setJiraUrl] = useState(localStorage.getItem("jiraUrl") || "https://devtrack.vanderlande.com")
   const [project, setProject] = useState(localStorage.getItem("project") || "DCW")
   const [issuetype, setIssuetype] = useState(localStorage.getItem("issuetype") || "Solution Initiative")
 
