@@ -110,6 +110,20 @@ function createWindow() {
     win.loadFile(path.join(__dirname, "dist", "index.html"))
   }
 
+  // 🔹 F5 refresh support
+  win.webContents.on("before-input-event", (event, input) => {
+
+    if (input.key === "F5"){
+      win.webContents.reload()
+      event.preventDefault()
+    }
+    // Optional: Ctrl+R also triggers reload
+    if (input.key === "r" && input.control) {
+      win.webContents.reload()
+      event.preventDefault()
+    }
+  })
+
   // Open external links in default browser
   win.webContents.setWindowOpenHandler(({ url }) => {
     if (!url.startsWith("http://localhost") && !url.startsWith("file://")) {
