@@ -9,7 +9,7 @@ const App: React.FC = () => {
   const [issuetype, setIssuetype] = useState(localStorage.getItem("issuetype") || "Solution Initiative")
 
   // 🔹 User list + dropdown
-  const [userList, setUserList] = useState(localStorage.getItem("userList") || "alice,bob,charlie")
+  const [userList, setUserList] = useState(localStorage.getItem("userList") || "nlrhoog,nlcdan,nljkos,nlevdo")
   const [user, setUser] = useState(localStorage.getItem("user") || "")
   const users = userList.split(",").map((u) => u.trim()).filter(Boolean)
 
@@ -102,7 +102,7 @@ const App: React.FC = () => {
               value={userList}
               onChange={(e) => setUserList(e.target.value)}
             />
-            <Form.Text className="text-muted">e.g. alice,bob,charlie</Form.Text>
+            <Form.Text className="text-muted">e.g. nlrhoog,nlcdan,nlevdo</Form.Text>
           </Form.Group>
 
           {/* User dropdown */}
