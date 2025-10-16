@@ -1,9 +1,17 @@
-const { app, BrowserWindow, ipcMain, safeStorage, shell } = require("electron")
+const {
+  app,
+  BrowserWindow,
+  ipcMain,
+  safeStorage,
+  shell,
+  Menu,
+  globalShortcut
+} = require("electron")
 const path = require("path")
 const fs = require("fs")
 const axios = require("axios")
 
-const isDev = process.env.NODE_ENV === "development" || !process.env.NODE_ENV === "production"
+const isDev = !app.isPackaged
 const patFilePath = () => path.join(app.getPath("userData"), "pat.bin")
 
 // --- PAT storage ---
@@ -17,7 +25,7 @@ function getPat() {
   try {
     const buf = fs.readFileSync(patFilePath())
     return safeStorage.decryptString(buf)
-  } catch (e) {
+  } catch {
     return null
   }
 }
@@ -25,7 +33,7 @@ function getPat() {
 function clearPat() {
   try {
     fs.unlinkSync(patFilePath())
-  } catch (e) {}
+  } catch {}
   return true
 }
 
@@ -49,9 +57,16 @@ function registerIpc() {
     const pat = getPat()
     if (!pat) throw new Error("No PAT stored")
 
-    // Get subtasks for user
-    const jqlSub = `project = "${project}" AND issuetype = "Sub-task" AND assignee = "${user}" ORDER BY Rank ASC`
-    const subData = await jqlSearch(jiraUrl, pat, jqlSub, "key,summary,assignee,status,parent", 500)
+    // 1) Fetch subtasks assigned to the user (include duedate)
+    const jqlSub =
+      `project = "${project}" AND issuetype = "Sub-task" AND assignee = "${user}" ORDER BY Rank ASC`
+    const subData = await jqlSearch(
+      jiraUrl,
+      pat,
+      jqlSub,
+      "key,summary,assignee,status,parent,duedate",
+      500
+    )
     const subs = subData.issues || []
 
     const subsByParent = {}
@@ -63,7 +78,8 @@ function registerIpc() {
       ;(subsByParent[p.key] ||= []).push({
         key: s.key,
         summary: s.fields.summary,
-        status: s.fields.status?.name || ""
+        status: s.fields.status?.name || "",
+        duedate: s.fields.duedate || null
       })
     }
 
@@ -71,19 +87,36 @@ function registerIpc() {
       return { columns: {}, initiativesOrdered: [], subtasksByParent: {} }
     }
 
-    // Get parent initiatives sorted by rank
+    // 2) Fetch parent initiatives sorted by Rank
+    //    Include: fixVersions + customfield_14221 (Target End Date)
     const keyList = Array.from(parentKeys).join(",")
-    const jqlParents = `project = "${project}" AND key in (${keyList}) AND issuetype = "${issuetype}" ORDER BY Rank ASC`
-    const parentsData = await jqlSearch(jiraUrl, pat, jqlParents, "key,summary,status,issuetype", 500)
+    const jqlParents =
+      `project = "${project}" AND key in (${keyList}) AND issuetype = "${issuetype}" ORDER BY Rank ASC`
+    const parentsData = await jqlSearch(
+      jiraUrl,
+      pat,
+      jqlParents,
+      "key,summary,status,issuetype,fixVersions,customfield_14221",
+      500
+    )
     const parents = parentsData.issues || []
 
     const columns = {}
     const initiativesOrdered = []
     for (const p of parents) {
       const st = p.fields.status?.name || "Unknown"
-      ;(columns[st] ||= []).push({ key: p.key, summary: p.fields.summary, status: st })
+      const versions = (p.fields.fixVersions || []).map(v => v.name)
+      const targetEnd = p.fields.customfield_14221 || null
+      ;(columns[st] ||= []).push({
+        key: p.key,
+        summary: p.fields.summary,
+        status: st,
+        fixVersions: versions,
+        targetEnd
+      })
       initiativesOrdered.push(p.key)
     }
+
     return { columns, initiativesOrdered, subtasksByParent: subsByParent }
   })
 }
@@ -93,7 +126,7 @@ function createWindow() {
   const win = new BrowserWindow({
     width: 1280,
     height: 900,
-    autoHideMenuBar: true,
+    autoHideMenuBar: true, // keep menu hidden
     webPreferences: {
       preload: path.join(__dirname, "preload.js"),
       contextIsolation: true,
@@ -106,25 +139,10 @@ function createWindow() {
     win.loadURL("http://localhost:5173")
     win.webContents.openDevTools()
   } else {
-    console.log("Loading file:", path.join(__dirname, "dist", "index.html"))
     win.loadFile(path.join(__dirname, "dist", "index.html"))
   }
 
-  // 🔹 F5 refresh support
-  win.webContents.on("before-input-event", (event, input) => {
-
-    if (input.key === "F5"){
-      win.webContents.reload()
-      event.preventDefault()
-    }
-    // Optional: Ctrl+R also triggers reload
-    if (input.key === "r" && input.control) {
-      win.webContents.reload()
-      event.preventDefault()
-    }
-  })
-
-  // Open external links in default browser
+  // External links -> default browser
   win.webContents.setWindowOpenHandler(({ url }) => {
     if (!url.startsWith("http://localhost") && !url.startsWith("file://")) {
       shell.openExternal(url)
@@ -132,7 +150,6 @@ function createWindow() {
     }
     return { action: "allow" }
   })
-
   win.webContents.on("will-navigate", (event, url) => {
     if (!url.startsWith("http://localhost") && !url.startsWith("file://")) {
       event.preventDefault()
@@ -146,11 +163,43 @@ app.whenReady().then(() => {
   registerIpc()
   createWindow()
 
-  app.on("activate", function () {
+  // Hidden application menu with accelerators (F5 refresh)
+  const template = [
+    {
+      label: "App",
+      submenu: [
+        {
+          label: "Refresh",
+          accelerator: "F5",
+          click: () => {
+            const win = BrowserWindow.getFocusedWindow()
+            if (win) win.webContents.reload()
+          }
+        },
+        { role: "reload", accelerator: "CmdOrCtrl+R" },
+        { type: "separator" },
+        { role: "quit" }
+      ]
+    }
+  ]
+  const menu = Menu.buildFromTemplate(template)
+  Menu.setApplicationMenu(menu)
+
+  // Fallback global shortcut (some environments)
+  globalShortcut.register("F5", () => {
+    const win = BrowserWindow.getFocusedWindow()
+    if (win) win.webContents.reload()
+  })
+
+  app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow()
   })
 })
 
-app.on("window-all-closed", function () {
+app.on("will-quit", () => {
+  globalShortcut.unregisterAll()
+})
+
+app.on("window-all-closed", () => {
   if (process.platform !== "darwin") app.quit()
 })

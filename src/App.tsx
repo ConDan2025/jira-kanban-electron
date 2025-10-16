@@ -3,53 +3,82 @@ import { Container, Button, Offcanvas, Form } from "react-bootstrap"
 import { Gear } from "react-bootstrap-icons"
 import KanbanBoard from "./components/KanbanBoard"
 
+declare global {
+  interface Window {
+    api: {
+      getPAT: () => Promise<string | null>
+      savePAT: (pat: string) => Promise<boolean>
+      clearPAT: () => Promise<boolean>
+      fetchMyWork: (
+        jiraUrl: string,
+        project: string,
+        issuetype: string,
+        user: string
+      ) => Promise<any>
+    }
+  }
+}
+
 const App: React.FC = () => {
-  const [jiraUrl, setJiraUrl] = useState(localStorage.getItem("jiraUrl") || "https://devtrack.vanderlande.com")
+  // Core settings
+  const [jiraUrl, setJiraUrl] = useState(localStorage.getItem("jiraUrl") || "https://your-jira-url")
   const [project, setProject] = useState(localStorage.getItem("project") || "DCW")
   const [issuetype, setIssuetype] = useState(localStorage.getItem("issuetype") || "Solution Initiative")
 
-  // 🔹 User list + dropdown
-  const [userList, setUserList] = useState(localStorage.getItem("userList") || "nlrhoog,nlcdan,nljkos,nlevdo")
+  // User list (comma-separated) + selected user
+  const [userList, setUserList] = useState(localStorage.getItem("userList") || "alice,bob,charlie")
   const [user, setUser] = useState(localStorage.getItem("user") || "")
-  const users = userList.split(",").map((u) => u.trim()).filter(Boolean)
+  const users = userList.split(",").map(u => u.trim()).filter(Boolean)
 
-  // 🔹 Search + refresh
+  // Search + refresh
   const [search, setSearch] = useState("")
   const [refreshInterval, setRefreshInterval] = useState<number>(0)
   const [refreshKey, setRefreshKey] = useState<number>(0)
 
-  // 🔹 Settings panel
+  // Settings panel
   const [showSettings, setShowSettings] = useState(false)
 
-  // 🔹 PAT storage
+  // PAT (safeStorage via IPC)
   const [pat, setPat] = useState<string | null>(null)
   const [tempPat, setTempPat] = useState("")
 
+  // Feature toggles
+  const [showFixVersions, setShowFixVersions] = useState<boolean>(
+    localStorage.getItem("showFixVersions") === "true"
+  )
+  const [showTargetEnd, setShowTargetEnd] = useState<boolean>(
+    localStorage.getItem("showTargetEnd") === "true"
+  )
+
+  // Load stored PAT on mount
   useEffect(() => {
     const loadPat = async () => {
-      const stored = await window.api.getPAT()
-      setPat(stored)
+      try {
+        const stored = await window.api.getPAT()
+        setPat(stored)
+      } catch {
+        setPat(null)
+      }
     }
     loadPat()
   }, [])
 
+  // Persist list + selected user
   useEffect(() => {
     localStorage.setItem("userList", userList)
-    if (user) {
-      localStorage.setItem("user", user)
-    }
-  }, [user, userList])
+    if (user) localStorage.setItem("user", user)
+  }, [userList, user])
 
   return (
     <Container fluid className="p-3">
-      {/* ⚙️ Cogwheel */}
+      {/* Cogwheel for settings */}
       <div className="d-flex justify-content-end mb-3">
         <Button variant="outline-secondary" onClick={() => setShowSettings(true)}>
           <Gear size={20} /> Settings
         </Button>
       </div>
 
-      {/* Settings Panel */}
+      {/* Settings Sidebar */}
       <Offcanvas show={showSettings} onHide={() => setShowSettings(false)} placement="end">
         <Offcanvas.Header closeButton>
           <Offcanvas.Title>Settings</Offcanvas.Title>
@@ -102,29 +131,30 @@ const App: React.FC = () => {
               value={userList}
               onChange={(e) => setUserList(e.target.value)}
             />
-            <Form.Text className="text-muted">e.g. nlrhoog,nlcdan,nlevdo</Form.Text>
+            <Form.Text className="text-muted">e.g. alice,bob,charlie</Form.Text>
           </Form.Group>
 
           {/* User dropdown */}
           <Form.Group className="mb-3">
             <Form.Label>Select User</Form.Label>
-            <Form.Select value={user} onChange={(e) => setUser(e.target.value)}>
+            <Form.Select
+              value={user}
+              onChange={(e) => setUser(e.target.value)}
+            >
               <option value="">-- Select user --</option>
               {users.map((u) => (
-                <option key={u} value={u}>
-                  {u}
-                </option>
+                <option key={u} value={u}>{u}</option>
               ))}
             </Form.Select>
           </Form.Group>
 
-          {/* PAT Storage */}
+          {/* PAT Storage via safeStorage */}
           <Form.Group className="mb-3">
             <Form.Label>Jira Personal Access Token</Form.Label>
             <Form.Control
               type="password"
               placeholder="Enter your PAT"
-              value={tempPat || ""}
+              value={tempPat}
               onChange={(e) => setTempPat(e.target.value)}
             />
             <div className="mt-2">
@@ -133,11 +163,11 @@ const App: React.FC = () => {
                 size="sm"
                 className="me-2"
                 onClick={async () => {
-                  if (tempPat.trim()) {
-                    await window.api.savePAT(tempPat.trim())
-                    setPat(tempPat.trim())
-                    setTempPat("")
-                  }
+                  const val = tempPat.trim()
+                  if (!val) return
+                  await window.api.savePAT(val)
+                  setPat(val)
+                  setTempPat("")
                 }}
               >
                 Save PAT
@@ -183,15 +213,41 @@ const App: React.FC = () => {
               <option value={5}>Every 5 min</option>
               <option value={10}>Every 10 min</option>
             </Form.Select>
+            <Button
+              variant="primary"
+              onClick={() => setRefreshKey(refreshKey + 1)}
+              className="mt-2"
+            >
+              🔄 Refresh Now
+            </Button>
           </Form.Group>
 
-          <Button
-            variant="primary"
-            onClick={() => setRefreshKey(refreshKey + 1)}
-            className="mt-2"
-          >
-            🔄 Refresh Now
-          </Button>
+          {/* Feature toggles */}
+          <Form.Group className="mb-3">
+            <Form.Check
+              type="switch"
+              id="show-fixversions"
+              label="Show Fix Versions on cards"
+              checked={showFixVersions}
+              onChange={(e) => {
+                setShowFixVersions(e.target.checked)
+                localStorage.setItem("showFixVersions", String(e.target.checked))
+              }}
+            />
+          </Form.Group>
+
+          <Form.Group className="mb-3">
+            <Form.Check
+              type="switch"
+              id="show-target-end"
+              label="Show Target End Date on cards"
+              checked={showTargetEnd}
+              onChange={(e) => {
+                setShowTargetEnd(e.target.checked)
+                localStorage.setItem("showTargetEnd", String(e.target.checked))
+              }}
+            />
+          </Form.Group>
         </Offcanvas.Body>
       </Offcanvas>
 
@@ -204,6 +260,8 @@ const App: React.FC = () => {
         search={search}
         refreshInterval={refreshInterval}
         refreshKey={refreshKey}
+        showFixVersions={showFixVersions}
+        showTargetEnd={showTargetEnd}
       />
     </Container>
   )
